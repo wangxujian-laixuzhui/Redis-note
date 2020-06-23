@@ -51,6 +51,7 @@ typedef struct redisObject {
 | REDIS\_ENCODING\_SKIPLIST   | 跳跃表和字典       |
 
 每种类型的对象至少使用了两种编码，具体如下（记忆顺序使用内部结构，最原始的结构要不就是整数值、整数集合、压缩列表）
+
 String：int,embstr,raw
 list:压缩列表、双端列表
 hash：压缩列表、字典

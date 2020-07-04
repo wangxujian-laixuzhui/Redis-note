@@ -1,6 +1,6 @@
 Redis的数据库就是使用字典来作为底层实现的，对数据库的增删改查都是构建在字典的操作之上。
 
-字典还是哈希键的底层实现之一，但一个哈希键包含的键值对比较多，又或者键值对中的元素都是较长的字符串时，Redis就会用字典作为哈希键的底层实现。
+字典还是哈希键的底层实现之一，当一个哈希键包含的键值对比较多，又或者键值对中的元素都是较长的字符串时，Redis就会用字典作为哈希键的底层实现。
 
 # 4.1 字典的实现
 
@@ -60,7 +60,7 @@ typedef struct dict {
 } dict;
 ```
 
-type和privdata是针对不同类型大家键值对，为创建多态字典而设置的：
+type和privdata是针对不同类型键值对，为创建多态字典而设置的：
 
 - type是一个指向dictType结构的指针，每个dictType都保存了一簇用于操作特定类型键值对的函数，Redis会为用途不同的字典设置不同的类型特定函数。
 - privdata保存了需要传给那些类型特定函数的可选参数。
@@ -70,12 +70,15 @@ typedef struct dictType {
   // 计算哈希值的函数
   unsigned int (*hashFunction) (const void *key);
   
-  // 复制键的函数
-  void *(*keyDup) (void *privdata, const void *obj);
-  
   // 对比键的函数
   void *(*keyCompare) (void *privdata, const void *key1, const void *key2);
   
+  // 复制键\值的函数
+  void *(*keyDup) (void *privdata, const void *obj);
+  
+  // 复制值的函数
+  void *(*valDup)(void *privdata, const void *obj);
+    
   // 销毁键的函数
   void (*keyDestructor) (void *privdata, void *key);
   
@@ -134,16 +137,19 @@ load_factor = ht[0].used / ht[0].size
 
 注：执行BGSAVE或BGREWRITEAOF过程中，Redis需要创建当前服务器进程的子进程，而多数操作系统都是用写时复制来优化子进程的效率，所以在子进程存在期间，服务器会提高执行扩展操作所需的负载因子，从而尽可能地避免在子进程存在期间扩展哈希表，避免不避免的内存写入，节约内存。
 
+收缩：
+  负载因子小于0.1时
+
 # 4.5 渐进式rehash
 
 将ht[0]中的键值对rehash到ht[1]中的操作不是一次性完成的，而是分多次渐进式的：
 
 1. 为ht[1]分配空间
 2. 在字典中维持一个索引计数器变量rehashidx，设置为0，表示rehash工作正式开始
-3. rehash期间，**每次对字典的增删改查操作**，会顺带将ht[0]在rehashidx索引上的所有键值对rehash到ht[1]，rehash完成之后，rehashidx属性的值+1
+3. rehash期间，**每次对字典的删改查操作**，会顺带将ht[0]在rehashidx索引上的所有键值对rehash到ht[1]，rehash完成之后，rehashidx属性的值+1（增只会在新表上）
 4. 最终ht[0]会全部rehash到ht[1]，这是将rehashidx设置为-1，表示rehash完成
 
-渐进式rehash过程中，字典会有两个哈希表，字典的增删改查会在两个哈希表上进行。
+渐进式rehash过程中，字典会有两个哈希表，字典的删改查会在两个哈希表，增只会在新表上进行。
 
 # 4.6 字典API
 
